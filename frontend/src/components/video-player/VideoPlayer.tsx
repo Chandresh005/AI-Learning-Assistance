@@ -56,8 +56,23 @@ export function VideoPlayer({
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const ytHostRef = useRef<HTMLDivElement>(null);
   const ytPlayerRef = useRef<any>(null);
+  const ytReadyRef = useRef<boolean>(false);
   const ytIntervalRef = useRef<any>(null);
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  onTimeUpdateRef.current = onTimeUpdate;
+
+  /** Safely invoke a YouTube player method only once the player is ready. */
+  const callYT = (method: string, ...args: any[]): any => {
+    const p = ytPlayerRef.current;
+    if (!ytReadyRef.current || !p || typeof p[method] !== "function") return undefined;
+    try {
+      return p[method](...args);
+    } catch {
+      return undefined;
+    }
+  };
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -71,28 +86,31 @@ export function VideoPlayer({
 
   // 1. YouTube IFrame API Initialization
   useEffect(() => {
-    if (!ytVideoId) {
-      if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.destroy(); } catch {}
-        ytPlayerRef.current = null;
-      }
-      return;
-    }
+    if (!ytVideoId) return;
 
-    let isMounted = true;
+    let cancelled = false;
+    ytReadyRef.current = false;
+    setIsPlaying(false);
+
+    const stopPolling = () => {
+      if (ytIntervalRef.current) {
+        clearInterval(ytIntervalRef.current);
+        ytIntervalRef.current = null;
+      }
+    };
 
     const setupPlayer = () => {
-      if (!isMounted || !window.YT || !window.YT.Player) return;
+      if (cancelled || !ytHostRef.current || !window.YT?.Player) return;
 
-      if (ytPlayerRef.current) {
-        try {
-          ytPlayerRef.current.destroy();
-        } catch {}
-        ytPlayerRef.current = null;
-      }
+      // Fresh mount node: YouTube replaces this child with its iframe, React never owns it.
+      ytHostRef.current.innerHTML = "";
+      const mountNode = document.createElement("div");
+      ytHostRef.current.appendChild(mountNode);
 
-      ytPlayerRef.current = new window.YT.Player("youtube-player-element", {
+      ytPlayerRef.current = new window.YT.Player(mountNode, {
         videoId: ytVideoId,
+        width: "100%",
+        height: "100%",
         playerVars: {
           autoplay: 0,
           controls: showNativeControls ? 1 : 0,
@@ -105,37 +123,32 @@ export function VideoPlayer({
         },
         events: {
           onReady: (event: any) => {
-            if (!isMounted) return;
-            const dur = event.target.getDuration() || 0;
+            if (cancelled) return;
+            ytReadyRef.current = true;
+            const dur = event.target.getDuration?.() || 0;
             if (dur > 0) {
               setDuration(dur);
-              onTimeUpdate(event.target.getCurrentTime() || 0, dur);
+              onTimeUpdateRef.current(event.target.getCurrentTime?.() || 0, dur);
             }
           },
           onStateChange: (event: any) => {
-            if (!isMounted) return;
-            // 1: PLAYING, 2: PAUSED, 0: ENDED
-            if (event.data === 1) {
+            if (cancelled) return;
+            const PLAYING = window.YT?.PlayerState?.PLAYING ?? 1;
+            if (event.data === PLAYING) {
               setIsPlaying(true);
-              if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+              stopPolling();
               ytIntervalRef.current = setInterval(() => {
-                if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
-                  const cur = ytPlayerRef.current.getCurrentTime() || 0;
-                  const dur = ytPlayerRef.current.getDuration() || duration;
-                  if (dur > 0) setDuration(dur);
-                  onTimeUpdate(cur, dur);
-                }
+                const cur = callYT("getCurrentTime") || 0;
+                const dur = callYT("getDuration") || 0;
+                if (dur > 0) setDuration(dur);
+                onTimeUpdateRef.current(cur, dur);
               }, 250);
             } else {
               setIsPlaying(false);
-              if (ytIntervalRef.current) {
-                clearInterval(ytIntervalRef.current);
-                ytIntervalRef.current = null;
-              }
-              if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
-                const cur = ytPlayerRef.current.getCurrentTime() || 0;
-                const dur = ytPlayerRef.current.getDuration() || duration;
-                onTimeUpdate(cur, dur);
+              stopPolling();
+              const cur = callYT("getCurrentTime");
+              if (typeof cur === "number") {
+                onTimeUpdateRef.current(cur, callYT("getDuration") || 0);
               }
             }
           }
@@ -143,39 +156,48 @@ export function VideoPlayer({
       });
     };
 
-    if (!window.YT) {
-      const tag = document.createElement("script");
-      tag.src = "https://www.youtube.com/iframe_api";
-      const firstScriptTag = document.getElementsByTagName("script")[0];
-      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+    if (window.YT?.Player) {
+      setupPlayer();
+    } else {
+      if (!document.getElementById("yt-iframe-api")) {
+        const tag = document.createElement("script");
+        tag.id = "yt-iframe-api";
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+      }
+      const prev = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
+        prev?.();
         setupPlayer();
       };
-    } else {
-      setupPlayer();
     }
 
     return () => {
-      isMounted = false;
-      if (ytIntervalRef.current) {
-        clearInterval(ytIntervalRef.current);
-        ytIntervalRef.current = null;
-      }
+      cancelled = true;
+      stopPolling();
+      ytReadyRef.current = false;
+      try {
+        ytPlayerRef.current?.destroy?.();
+      } catch {}
+      ytPlayerRef.current = null;
+      if (ytHostRef.current) ytHostRef.current.innerHTML = "";
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ytVideoId, showNativeControls]);
 
   // 2. Sync playback time when seeking from outside (e.g. clicking a citation)
   useEffect(() => {
-    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
-      const cur = ytPlayerRef.current.getCurrentTime();
-      if (Math.abs(cur - currentTimestamp) > 1.2) {
-        ytPlayerRef.current.seekTo(currentTimestamp, true);
+    if (ytVideoId) {
+      const cur = callYT("getCurrentTime");
+      if (typeof cur === "number" && Math.abs(cur - currentTimestamp) > 1.2) {
+        callYT("seekTo", currentTimestamp, true);
       }
     } else if (videoRef.current) {
       if (Math.abs(videoRef.current.currentTime - currentTimestamp) > 1.0) {
         videoRef.current.currentTime = currentTimestamp;
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTimestamp, ytVideoId]);
 
   // HTML5 Video handlers
@@ -196,13 +218,13 @@ export function VideoPlayer({
   };
 
   const togglePlay = () => {
-    if (ytVideoId && ytPlayerRef.current) {
-      if (isPlaying) {
-        ytPlayerRef.current.pauseVideo();
-        setIsPlaying(false);
+    if (ytVideoId) {
+      if (!ytReadyRef.current) return; // player still loading — ignore click
+      const PLAYING = window.YT?.PlayerState?.PLAYING ?? 1;
+      if (callYT("getPlayerState") === PLAYING) {
+        callYT("pauseVideo");
       } else {
-        ytPlayerRef.current.playVideo();
-        setIsPlaying(true);
+        callYT("playVideo");
       }
       return;
     }
@@ -219,8 +241,8 @@ export function VideoPlayer({
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const targetTime = parseFloat(e.target.value);
-    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.seekTo) {
-      ytPlayerRef.current.seekTo(targetTime, true);
+    if (ytVideoId) {
+      callYT("seekTo", targetTime, true);
       onTimeUpdate(targetTime, duration);
       return;
     }
@@ -231,10 +253,11 @@ export function VideoPlayer({
   };
 
   const skipTime = (deltaSeconds: number) => {
-    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
-      const cur = ytPlayerRef.current.getCurrentTime() || 0;
+    if (ytVideoId) {
+      const cur = callYT("getCurrentTime");
+      if (typeof cur !== "number") return;
       const newTime = Math.max(0, Math.min(cur + deltaSeconds, duration || 10000));
-      ytPlayerRef.current.seekTo(newTime, true);
+      callYT("seekTo", newTime, true);
       onTimeUpdate(newTime, duration);
       return;
     }
@@ -245,8 +268,8 @@ export function VideoPlayer({
   };
 
   const handleRateChange = (rate: number) => {
-    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.setPlaybackRate) {
-      ytPlayerRef.current.setPlaybackRate(rate);
+    if (ytVideoId) {
+      callYT("setPlaybackRate", rate);
       setPlaybackRate(rate);
       return;
     }
@@ -256,12 +279,13 @@ export function VideoPlayer({
   };
 
   const toggleMute = () => {
-    if (ytVideoId && ytPlayerRef.current) {
+    if (ytVideoId) {
+      if (!ytReadyRef.current) return;
       if (isMuted) {
-        ytPlayerRef.current.unMute();
+        callYT("unMute");
         setIsMuted(false);
       } else {
-        ytPlayerRef.current.mute();
+        callYT("mute");
         setIsMuted(true);
       }
       return;
@@ -292,11 +316,7 @@ export function VideoPlayer({
       >
         {ytVideoId ? (
           <div className="w-full aspect-video bg-black relative flex items-center justify-center overflow-hidden">
-            <div
-              id="youtube-player-element"
-              key={`${ytVideoId}-${showNativeControls ? "ctrl" : "noctrl"}`}
-              className="w-full h-full pointer-events-auto"
-            />
+            <div ref={ytHostRef} className="w-full h-full [&>iframe]:w-full [&>iframe]:h-full" />
             {/* Click to play/pause transparent overlay when native controls are hidden */}
             {!showNativeControls && (
               <div
