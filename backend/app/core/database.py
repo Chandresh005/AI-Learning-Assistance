@@ -6,7 +6,7 @@ from app.core.config import settings
 # Engine setup
 engine = create_async_engine(
     settings.DATABASE_URL,
-    echo=settings.DEBUG,
+    echo=False,
     future=True
 )
 
@@ -19,6 +19,14 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 Base = declarative_base()
+
+
+async def init_db() -> None:
+    """Initialize database tables."""
+    # Import all models to ensure they are registered with Base.metadata
+    from app import models  # noqa: F401
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
