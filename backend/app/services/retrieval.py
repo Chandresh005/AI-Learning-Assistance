@@ -5,14 +5,32 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.models.chunk import TranscriptChunk, DocumentChunk
 
+STOPWORDS = {
+    "a", "about", "above", "after", "again", "against", "all", "am", "an", "and",
+    "any", "are", "aren't", "as", "at", "be", "because", "been", "before", "being",
+    "below", "between", "both", "but", "by", "can", "cannot", "could", "did", "do",
+    "does", "doing", "don't", "down", "during", "each", "few", "for", "from",
+    "further", "had", "has", "have", "having", "he", "her", "here", "hers", "herself",
+    "him", "himself", "his", "how", "i", "if", "in", "into", "is", "isn't", "it",
+    "its", "itself", "me", "more", "most", "my", "myself", "no", "nor", "not", "of",
+    "off", "on", "once", "only", "or", "other", "ought", "our", "ours", "ourselves",
+    "out", "over", "own", "same", "she", "should", "so", "some", "such", "than",
+    "that", "the", "their", "theirs", "them", "themselves", "then", "there", "these",
+    "they", "this", "those", "through", "to", "too", "under", "until", "up", "very",
+    "was", "wasn't", "we", "were", "weren't", "what", "when", "where", "which",
+    "while", "who", "whom", "why", "with", "would", "you", "your", "yours", "yourself"
+}
+
 
 def tokenize_text(text: str) -> set:
-    """Extract lowercased alphanumeric tokens for keyword matching."""
-    return set(re.findall(r"\w+", text.lower()))
+    """Extract lowercased alphanumeric tokens, filtering common stopwords."""
+    all_tokens = set(re.findall(r"\w+", text.lower()))
+    content_tokens = {t for t in all_tokens if t not in STOPWORDS and len(t) > 2}
+    return content_tokens if content_tokens else all_tokens
 
 
 def bm25_keyword_score(query_tokens: set, text: str) -> float:
-    """Computes a lexical overlap score between query tokens and chunk text."""
+    """Computes a lexical overlap score between meaningful query tokens and chunk text."""
     if not query_tokens or not text:
         return 0.0
     text_tokens = re.findall(r"\w+", text.lower())
@@ -85,14 +103,15 @@ async def retrieve_permitted_evidence(
     scored_docs = []
     for chunk in all_doc_chunks:
         lex_score = bm25_keyword_score(query_tokens, chunk.text)
-        scored_docs.append({
-            "type": chunk.source_type,
-            "chunk_id": chunk.chunk_id,
-            "page_number": chunk.page_number,
-            "slide_number": chunk.slide_number,
-            "text": chunk.text,
-            "score": lex_score
-        })
+        if lex_score > 0:
+            scored_docs.append({
+                "type": chunk.source_type,
+                "chunk_id": chunk.chunk_id,
+                "page_number": chunk.page_number,
+                "slide_number": chunk.slide_number,
+                "text": chunk.text,
+                "score": lex_score
+            })
 
     scored_docs.sort(key=lambda x: x["score"], reverse=True)
     selected_docs = [d for d in scored_docs[:top_k_docs] if d["score"] > 0]

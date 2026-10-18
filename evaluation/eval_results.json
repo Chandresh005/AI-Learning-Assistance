@@ -1,0 +1,61 @@
+{
+  "total_scenarios": 7,
+  "passed_scenarios": 7,
+  "pass_rate_percentage": 100.0,
+  "timestamp_violation_rate": 0.0,
+  "citation_accuracy_percentage": 100.0,
+  "retrieval_accuracy_percentage": 100.0,
+  "hallucination_rate": 0.0,
+  "average_latency_ms": 28.1,
+  "results": [
+    {
+      "test_id": 1,
+      "name": "Before-Timestamp Retrieval",
+      "passed": true,
+      "latency_ms": 39.32,
+      "detail": "Accurately retrieved video chunk from covered range [120s - 240s]."
+    },
+    {
+      "test_id": 2,
+      "name": "Future-Content Leakage Prevention",
+      "passed": true,
+      "latency_ms": 21.55,
+      "detail": "Strictly blocked video content taught at 35:00 from student at 10:00."
+    },
+    {
+      "test_id": 3,
+      "name": "PDF Page Citation Verification",
+      "passed": true,
+      "latency_ms": 22.42,
+      "detail": "Retrieved PDF page 8 citation for gradient flow explanation."
+    },
+    {
+      "test_id": 4,
+      "name": "PPT Slide Citation Verification",
+      "passed": true,
+      "latency_ms": 22.59,
+      "detail": "Retrieved PPT slide 14 citation for sine/cosine formula."
+    },
+    {
+      "test_id": 5,
+      "name": "Controlled Refusal for Out-of-Scope Query",
+      "passed": true,
+      "latency_ms": 21.27,
+      "detail": "Gracefully stated evidence was not found in permitted material without hallucinating."
+    },
+    {
+      "test_id": 6,
+      "name": "Follow-Up Context Retention",
+      "passed": true,
+      "latency_ms": 48.71,
+      "detail": "Maintained session conversation history across consecutive turns."
+    },
+    {
+      "test_id": 7,
+      "name": "Source Citation Temporal Validity",
+      "passed": true,
+      "latency_ms": 21.12,
+      "detail": "Confirmed citation bounds are mathematically valid and within permitted range."
+    }
+  ]
+}
