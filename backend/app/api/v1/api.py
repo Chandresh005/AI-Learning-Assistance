@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import health, courses, videos, resources, ask, quiz, progress
+from app.api.v1.endpoints import health, courses, videos, resources, ask, quiz, progress, interview
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["Health"])
@@ -9,3 +9,4 @@ api_router.include_router(resources.router, prefix="/resources", tags=["Resource
 api_router.include_router(ask.router, prefix="/ask", tags=["Ask / RAG"])
 api_router.include_router(quiz.router, prefix="/quiz", tags=["Quiz"])
 api_router.include_router(progress.router, prefix="/progress", tags=["Learner Progress"])
+api_router.include_router(interview.router, prefix="/interview", tags=["AI Mock Interview"])
