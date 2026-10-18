@@ -65,6 +65,7 @@ export function VideoPlayer({
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showNativeControls, setShowNativeControls] = useState(false);
 
   const ytVideoId = extractYouTubeId(videoSrc);
 
@@ -85,19 +86,22 @@ export function VideoPlayer({
 
       if (ytPlayerRef.current) {
         try {
-          ytPlayerRef.current.loadVideoById(ytVideoId);
-          return;
+          ytPlayerRef.current.destroy();
         } catch {}
+        ytPlayerRef.current = null;
       }
 
       ytPlayerRef.current = new window.YT.Player("youtube-player-element", {
         videoId: ytVideoId,
         playerVars: {
           autoplay: 0,
-          controls: 1,
+          controls: showNativeControls ? 1 : 0,
           rel: 0,
           modestbranding: 1,
-          playsinline: 1
+          playsinline: 1,
+          iv_load_policy: 3,
+          fs: 0,
+          disablekb: showNativeControls ? 0 : 1
         },
         events: {
           onReady: (event: any) => {
@@ -158,7 +162,7 @@ export function VideoPlayer({
         ytIntervalRef.current = null;
       }
     };
-  }, [ytVideoId]);
+  }, [ytVideoId, showNativeControls]);
 
   // 2. Sync playback time when seeking from outside (e.g. clicking a citation)
   useEffect(() => {
@@ -287,8 +291,20 @@ export function VideoPlayer({
         className="relative bg-slate-950 rounded-2xl overflow-hidden shadow-lg border border-slate-800 group"
       >
         {ytVideoId ? (
-          <div className="w-full aspect-video bg-black flex items-center justify-center">
-            <div id="youtube-player-element" className="w-full h-full" />
+          <div className="w-full aspect-video bg-black relative flex items-center justify-center overflow-hidden">
+            <div
+              id="youtube-player-element"
+              key={`${ytVideoId}-${showNativeControls ? "ctrl" : "noctrl"}`}
+              className="w-full h-full pointer-events-auto"
+            />
+            {/* Click to play/pause transparent overlay when native controls are hidden */}
+            {!showNativeControls && (
+              <div
+                onClick={togglePlay}
+                className="absolute inset-0 cursor-pointer z-10"
+                title={isPlaying ? "Click to Pause" : "Click to Play"}
+              />
+            )}
           </div>
         ) : (
           <video
@@ -304,11 +320,11 @@ export function VideoPlayer({
           />
         )}
 
-        {/* Play/Pause Center Overlay Button when paused (HTML5 only) */}
-        {!ytVideoId && !isPlaying && (
+        {/* Play/Pause Center Overlay Button when paused */}
+        {!isPlaying && (
           <button
             onClick={togglePlay}
-            className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-blue-600/90 text-white flex items-center justify-center hover:scale-110 transition-transform shadow-xl backdrop-blur-xs cursor-pointer"
+            className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-blue-600/90 text-white flex items-center justify-center hover:scale-110 transition-transform shadow-xl backdrop-blur-xs cursor-pointer z-20 pointer-events-auto"
             aria-label="Play Video"
           >
             <Play className="w-8 h-8 fill-current ml-1" />
@@ -382,11 +398,25 @@ export function VideoPlayer({
             </div>
 
             <div className="flex items-center gap-3">
-              {/* YouTube indicator */}
+              {/* YouTube indicator & Controls Toggle */}
               {ytVideoId && (
-                <div className="flex items-center gap-1 text-[11px] font-medium text-red-400 bg-red-950/60 border border-red-800/40 px-2 py-0.5 rounded-full">
-                  <YouTubeIcon className="w-3.5 h-3.5" />
-                  <span>YouTube Stream</span>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1 text-[11px] font-medium text-red-400 bg-red-950/60 border border-red-800/40 px-2 py-0.5 rounded-full">
+                    <YouTubeIcon className="w-3.5 h-3.5" />
+                    <span>YouTube Stream</span>
+                  </div>
+
+                  <button
+                    onClick={() => setShowNativeControls(!showNativeControls)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
+                      showNativeControls
+                        ? "bg-blue-600 border-blue-500 text-white"
+                        : "bg-slate-800/80 border-slate-700 text-slate-400 hover:text-slate-200"
+                    }`}
+                    title="Toggle native YouTube player controls"
+                  >
+                    {showNativeControls ? "Native Bar: On" : "Native Bar: Hidden"}
+                  </button>
                 </div>
               )}
 
