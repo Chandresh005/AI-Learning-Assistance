@@ -101,3 +101,25 @@ async def ask_question(request: AskRequest, db: AsyncSession = Depends(get_db)):
         timestamp_scope=time_scope_str,
         conversation_id=conversation_id
     )
+
+
+@router.get("/conversations/{conversation_id}", summary="Get conversation history for a session")
+async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(Message)
+        .where(Message.conversation_id == conversation_id)
+        .order_by(Message.created_at.asc())
+    )
+    messages = res.scalars().all()
+    return [
+        {
+            "id": m.id,
+            "role": m.role,
+            "content": m.content,
+            "timestamp": m.timestamp,
+            "citations": m.citations,
+            "created_at": m.created_at.isoformat()
+        }
+        for m in messages
+    ]
+
