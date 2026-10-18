@@ -16,7 +16,9 @@ import {
   Briefcase,
   Send,
   Award,
-  AlertCircle
+  AlertCircle,
+  Search,
+  Lock
 } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils";
 import { TranscriptChunk } from "@/types";
@@ -27,6 +29,9 @@ interface ContentTabsProps {
   onSeekToTimestamp: (seconds: number) => void;
   courseId?: string;
   videoId?: string;
+  onTranscriptsLoaded?: (chunks: TranscriptChunk[]) => void;
+  onExplainSegment?: (chunk: TranscriptChunk) => void;
+  isDark?: boolean;
 }
 
 interface QuizItem {
@@ -42,48 +47,46 @@ export function ContentTabs({
   currentTimestamp,
   duration,
   onSeekToTimestamp,
-  courseId = "dl-101",
-  videoId = "lec-01"
+  courseId = "course-ml-100",
+  videoId = "vid-ml-day-01",
+  onTranscriptsLoaded,
+  onExplainSegment,
+  isDark = true
 }: ContentTabsProps) {
   const [activeTab, setActiveTab] = useState<"transcript" | "resources" | "quiz" | "progress" | "interview">("transcript");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Sample transcript chunks
   const sampleTranscripts: TranscriptChunk[] = [
     {
       id: "tc-1",
       startTime: 0,
-      endTime: 45,
-      text: "Welcome everyone to our lecture on Transformer Architectures and Attention Mechanisms. Today, we'll understand why recurrent models struggle with long sequences."
+      endTime: 75,
+      text: "Welcome to Day 1 of the 100 Days of Machine Learning series. Today we begin our journey by answering the foundational question: What is Machine Learning?"
     },
     {
       id: "tc-2",
-      startTime: 45,
-      endTime: 120,
-      text: "In traditional RNNs and LSTMs, information is squashed sequentially step-by-step into a hidden state vector. As sequence length grows, vanishing gradients and information bottlenecks occur."
+      startTime: 75,
+      endTime: 180,
+      text: "Let us contrast Traditional Programming with Machine Learning. In traditional programming, you feed Rules and Data into a computer to get Answers. In Machine Learning, you feed Data and Answers to produce the Rules (Model)."
     },
     {
       id: "tc-3",
-      startTime: 120,
-      endTime: 210,
-      text: "The breakthrough idea of attention is simple: instead of forcing the entire history into a single vector, let the model look back across all past token representations simultaneously."
+      startTime: 180,
+      endTime: 330,
+      text: "The classic definition of Machine Learning was coined by Arthur Samuel in 1959: the field of study that gives computers the ability to learn without being explicitly programmed."
     },
     {
       id: "tc-4",
-      startTime: 210,
-      endTime: 320,
-      text: "Mathematically, we define Queries, Keys, and Values. We compute the dot product between the Query and all Keys, scale by the square root of the key dimension, and apply a softmax function."
-    },
-    {
-      id: "tc-5",
-      startTime: 320,
-      endTime: 450,
-      text: "Multi-head attention takes this further by projecting queries, keys, and values into multiple representation subspaces, enabling the model to jointly attend to information from different representation positions."
+      startTime: 330,
+      endTime: 480,
+      text: "In 1997, Professor Tom Mitchell provided an operational definition: A computer program learns from Experience E with respect to Task T and Performance measure P, if its performance P on T improves with E."
     }
   ];
 
   // Dynamic transcripts from backend
   const [transcripts, setTranscripts] = useState<TranscriptChunk[]>([]);
-  const [isLoadingTranscripts, setIsLoadingTranscripts] = useState(false);
+  const [, setIsLoadingTranscripts] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -94,12 +97,14 @@ export function ContentTabs({
         if (res.ok) {
           const data = await res.json();
           if (isMounted && Array.isArray(data) && data.length > 0) {
-            setTranscripts(data.map((d: any) => ({
+            const mapped = data.map((d: any) => ({
               id: d.id,
               startTime: d.start_time,
               endTime: d.end_time,
               text: d.text
-            })));
+            }));
+            setTranscripts(mapped);
+            onTranscriptsLoaded?.(mapped);
             setIsLoadingTranscripts(false);
             return;
           }
@@ -107,11 +112,13 @@ export function ContentTabs({
       } catch {}
       if (isMounted) {
         setTranscripts(sampleTranscripts);
+        onTranscriptsLoaded?.(sampleTranscripts);
         setIsLoadingTranscripts(false);
       }
     };
     fetchTranscripts();
     return () => { isMounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [videoId]);
 
   // Quiz state
@@ -331,115 +338,170 @@ export function ContentTabs({
   const watchPercent = duration > 0 ? Math.min(100, Math.round((currentTimestamp / duration) * 100)) : 0;
 
   return (
-    <div className="w-full bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden flex flex-col">
+    <div
+      className={`w-full border rounded-2xl overflow-hidden flex flex-col transition-colors ${
+        isDark
+          ? "bg-slate-900/95 border-slate-800 text-slate-100 shadow-xl"
+          : "bg-white border-slate-200 text-slate-900 shadow-xs"
+      }`}
+    >
       {/* Tab Navigation */}
-      <div className="flex items-center border-b border-slate-200 bg-slate-50/70 px-4 pt-2 gap-2 overflow-x-auto no-scrollbar">
-        <button
-          onClick={() => setActiveTab("transcript")}
-          className={`flex items-center gap-2 pb-3 pt-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "transcript"
-              ? "border-blue-600 text-blue-600 bg-white rounded-t-lg border-t border-x border-slate-200"
-              : "border-transparent text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>Interactive Transcript</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("resources")}
-          className={`flex items-center gap-2 pb-3 pt-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "resources"
-              ? "border-blue-600 text-blue-600 bg-white rounded-t-lg border-t border-x border-slate-200"
-              : "border-transparent text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span>Course Resources (PDF & PPT)</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("quiz")}
-          className={`flex items-center gap-2 pb-3 pt-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "quiz"
-              ? "border-blue-600 text-blue-600 bg-white rounded-t-lg border-t border-x border-slate-200"
-              : "border-transparent text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <ClipboardCheck className="w-4 h-4" />
-          <span>Practice Quiz</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("progress")}
-          className={`flex items-center gap-2 pb-3 pt-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "progress"
-              ? "border-blue-600 text-blue-600 bg-white rounded-t-lg border-t border-x border-slate-200"
-              : "border-transparent text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <BarChart3 className="w-4 h-4" />
-          <span>Learner Progress</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab("interview")}
-          className={`flex items-center gap-2 pb-3 pt-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
-            activeTab === "interview"
-              ? "border-blue-600 text-blue-600 bg-white rounded-t-lg border-t border-x border-slate-200"
-              : "border-transparent text-slate-500 hover:text-slate-900"
-          }`}
-        >
-          <Briefcase className="w-4 h-4 text-purple-600" />
-          <span>AI Mock Interview</span>
-        </button>
+      <div
+        className={`flex items-center border-b px-4 pt-2 gap-1.5 overflow-x-auto no-scrollbar ${
+          isDark ? "border-slate-800 bg-slate-950/60" : "border-slate-200 bg-slate-50/70"
+        }`}
+      >
+        {[
+          { key: "transcript", label: "Interactive Transcript", icon: Clock },
+          { key: "resources", label: "Course Slides & PDFs", icon: BookOpen },
+          { key: "quiz", label: "Checkpoint Quiz", icon: ClipboardCheck },
+          { key: "progress", label: "Learner Analytics", icon: BarChart3 },
+          { key: "interview", label: "AI Mock Interview", icon: Briefcase }
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isSelected = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key as any)}
+              className={`flex items-center gap-2 pb-3 pt-2 px-3 text-xs font-semibold border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+                isSelected
+                  ? isDark
+                    ? "border-blue-500 text-blue-400 bg-slate-900 rounded-t-xl border-t border-x border-slate-800"
+                    : "border-blue-600 text-blue-600 bg-white rounded-t-xl border-t border-x border-slate-200"
+                  : isDark
+                  ? "border-transparent text-slate-400 hover:text-slate-200"
+                  : "border-transparent text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              <Icon className={`w-4 h-4 ${tab.key === "interview" ? "text-purple-500" : ""}`} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Tab Panels */}
-      <div className="p-4 min-h-[240px]">
+      <div className="p-4 min-h-[260px]">
         {/* Transcript Tab */}
         {activeTab === "transcript" && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
-              <span>Click any timestamp to seek video playback directly:</span>
-              <span className="font-mono-timestamp text-[11px] bg-slate-100 px-2 py-0.5 rounded">
-                Active at {formatTimestamp(currentTimestamp)}
-              </span>
+          <div className="space-y-3">
+            {/* Search & Active Playhead Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search lecture transcript..."
+                  className={`w-full pl-8 pr-3 py-1.5 rounded-xl border text-xs focus:outline-hidden ${
+                    isDark
+                      ? "bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-500 focus:border-blue-500"
+                      : "bg-slate-50 border-slate-200 text-slate-800 focus:border-blue-500"
+                  }`}
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className={`text-[11px] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  Click any timestamp to jump &bull; Click <strong>✨ Explain</strong> to ask AI
+                </span>
+                <span
+                  className={`font-mono-timestamp text-[11px] px-2 py-0.5 rounded-md border ${
+                    isDark
+                      ? "bg-blue-950/60 text-blue-300 border-blue-800/60"
+                      : "bg-slate-100 text-slate-700 border-slate-200"
+                  }`}
+                >
+                  {formatTimestamp(currentTimestamp)}
+                </span>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              {(transcripts.length > 0 ? transcripts : sampleTranscripts).map((chunk) => {
-                const isActive =
-                  currentTimestamp >= chunk.startTime && currentTimestamp <= chunk.endTime;
-                const isPast = currentTimestamp > chunk.endTime;
+            <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+              {(transcripts.length > 0 ? transcripts : sampleTranscripts)
+                .filter((chunk) =>
+                  searchQuery.trim()
+                    ? chunk.text.toLowerCase().includes(searchQuery.toLowerCase())
+                    : true
+                )
+                .map((chunk) => {
+                  const isActive =
+                    currentTimestamp >= chunk.startTime && currentTimestamp <= chunk.endTime;
+                  const isPast = currentTimestamp > chunk.endTime;
 
-                return (
-                  <div
-                    key={chunk.id}
-                    className={`flex items-start gap-3 p-3 rounded-xl border text-xs sm:text-sm transition-all ${
-                      isActive
-                        ? "bg-blue-50/70 border-blue-300 ring-1 ring-blue-400/30"
-                        : isPast
-                        ? "bg-slate-50/50 border-slate-200 text-slate-700"
-                        : "bg-white border-slate-200 opacity-60 hover:opacity-100"
-                    }`}
-                  >
-                    <button
-                      onClick={() => onSeekToTimestamp(chunk.startTime)}
-                      className={`flex items-center gap-1 font-mono-timestamp text-xs px-2 py-1 rounded-md cursor-pointer transition-colors shrink-0 ${
+                  return (
+                    <div
+                      key={chunk.id}
+                      className={`group flex flex-col sm:flex-row sm:items-start gap-2.5 p-3 rounded-xl border text-xs sm:text-sm transition-all ${
                         isActive
-                          ? "bg-blue-600 text-white font-bold"
-                          : "bg-slate-200/80 hover:bg-blue-100 text-slate-700"
+                          ? isDark
+                            ? "bg-blue-950/40 border-blue-500/70 ring-1 ring-blue-500/30"
+                            : "bg-blue-50/70 border-blue-300 ring-1 ring-blue-400/30"
+                          : isPast
+                          ? isDark
+                            ? "bg-slate-950/50 border-slate-800/90 text-slate-300"
+                            : "bg-slate-50/60 border-slate-200 text-slate-700"
+                          : isDark
+                          ? "bg-slate-900/40 border-slate-800/60 text-slate-400 opacity-75 hover:opacity-100"
+                          : "bg-white border-slate-200 opacity-65 hover:opacity-100"
                       }`}
-                      title="Jump to this segment"
                     >
-                      <Play className="w-3 h-3 fill-current" />
-                      <span>{formatTimestamp(chunk.startTime)}</span>
-                    </button>
-                    <p className="flex-1 leading-relaxed">{chunk.text}</p>
-                  </div>
-                );
-              })}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => onSeekToTimestamp(chunk.startTime)}
+                          className={`flex items-center gap-1 font-mono-timestamp text-xs px-2.5 py-1 rounded-lg cursor-pointer transition-colors ${
+                            isActive
+                              ? "bg-blue-600 text-white font-bold shadow-xs"
+                              : isDark
+                              ? "bg-slate-800 hover:bg-blue-900/70 text-blue-300 border border-slate-700"
+                              : "bg-slate-200/80 hover:bg-blue-100 text-slate-700"
+                          }`}
+                          title="Jump video to this segment"
+                        >
+                          <Play className="w-3 h-3 fill-current" />
+                          <span>
+                            {formatTimestamp(chunk.startTime)}&ndash;{formatTimestamp(chunk.endTime)}
+                          </span>
+                        </button>
+
+                        {/* Status Badge */}
+                        {isActive ? (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                            Playing
+                          </span>
+                        ) : isPast ? (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
+                            ✔ Covered
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400">
+                            <Lock className="w-2.5 h-2.5" /> Future
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="flex-1 leading-relaxed">{chunk.text}</p>
+
+                      {/* Inline Explain with AI Action */}
+                      {onExplainSegment && (
+                        <button
+                          onClick={() => onExplainSegment(chunk)}
+                          className={`self-end sm:self-center shrink-0 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                            isDark
+                              ? "bg-indigo-950/70 hover:bg-indigo-900 text-indigo-300 border-indigo-800/60"
+                              : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
+                          }`}
+                          title="Unlock/jump to this segment and ask the AI Copilot to explain it"
+                        >
+                          <Sparkles className="w-3 h-3 text-indigo-400" />
+                          <span>Explain</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           </div>
         )}

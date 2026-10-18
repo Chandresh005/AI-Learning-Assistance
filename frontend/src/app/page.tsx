@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Header } from "@/components/header/Header";
 import { VideoPlayer } from "@/components/video-player/VideoPlayer";
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
@@ -9,21 +9,11 @@ import {
   ListVideo,
   Play,
   CheckCircle2,
-  ExternalLink,
   Plus,
-  X,
-  Search,
-  Sparkles
+  X
 } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils";
-
-function YouTubeIcon({ className = "w-6 h-6" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-    </svg>
-  );
-}
+import { TranscriptChunk } from "@/types";
 
 interface PlaylistVideoItem {
   id: string;
@@ -123,14 +113,24 @@ export default function LearningStudioPage() {
   const [playlist, setPlaylist] = useState<PlaylistVideoItem[]>(DEFAULT_PLAYLIST);
   const [activeVideoIndex, setActiveVideoIndex] = useState<number>(0);
   const [currentTimestamp, setCurrentTimestamp] = useState<number>(0);
+  const [maxWatchedTimestamp, setMaxWatchedTimestamp] = useState<number>(0);
   const [duration, setDuration] = useState<number>(1200);
   const [isPlaylistOpen, setIsPlaylistOpen] = useState<boolean>(false);
   const [customUrlInput, setCustomUrlInput] = useState<string>("");
+
+  // Studio UI/UX States
+  const [isDark, setIsDark] = useState<boolean>(true);
+  const [isTheaterMode, setIsTheaterMode] = useState<boolean>(false);
+  const [isSidebarPinned, setIsSidebarPinned] = useState<boolean>(true);
+  const [chapters, setChapters] = useState<TranscriptChunk[]>([]);
+  const [pauseSignal, setPauseSignal] = useState<number>(0);
+  const [externalPrompt, setExternalPrompt] = useState<{ text: string; id: number } | null>(null);
 
   const activeVideo = playlist[activeVideoIndex] || playlist[0];
 
   const handleTimeUpdate = (currentTime: number, totalDuration: number) => {
     setCurrentTimestamp(currentTime);
+    setMaxWatchedTimestamp((prev) => Math.max(prev, currentTime));
     if (totalDuration > 0 && Math.abs(totalDuration - duration) > 1.0) {
       setDuration(totalDuration);
     }
@@ -138,11 +138,13 @@ export default function LearningStudioPage() {
 
   const handleSeekToTimestamp = (seconds: number) => {
     setCurrentTimestamp(seconds);
+    setMaxWatchedTimestamp((prev) => Math.max(prev, seconds));
   };
 
   const handleSelectVideo = (index: number) => {
     setActiveVideoIndex(index);
     setCurrentTimestamp(0);
+    setMaxWatchedTimestamp(0);
     setDuration(playlist[index].duration || 1200);
     setIsPlaylistOpen(false);
   };
@@ -163,12 +165,28 @@ export default function LearningStudioPage() {
     setPlaylist((prev) => [newVideo, ...prev]);
     setActiveVideoIndex(0);
     setCurrentTimestamp(0);
+    setMaxWatchedTimestamp(0);
     setCustomUrlInput("");
     setIsPlaylistOpen(false);
   };
 
+  const handleExplainSegment = (chunk: TranscriptChunk) => {
+    // Ensure playhead unlocks up to the end of this segment so zero-leakage guard permits explaining it
+    const targetTime = Math.max(currentTimestamp, chunk.endTime);
+    handleSeekToTimestamp(targetTime);
+    setPauseSignal((s) => s + 1);
+    setExternalPrompt({
+      text: `Explain this lecture segment (${formatTimestamp(chunk.startTime)}–${formatTimestamp(chunk.endTime)}): "${chunk.text}"`,
+      id: Date.now()
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col text-slate-900">
+    <div
+      className={`min-h-screen flex flex-col transition-colors ${
+        isDark ? "bg-[#0B0F19] text-slate-100" : "bg-slate-50 text-slate-900"
+      }`}
+    >
       {/* Top Application Header */}
       <Header
         currentTimestamp={currentTimestamp}
@@ -177,34 +195,54 @@ export default function LearningStudioPage() {
         lectureTitle={activeVideo.title}
         onTogglePlaylist={() => setIsPlaylistOpen(!isPlaylistOpen)}
         playlistCount={playlist.length}
+        isDark={isDark}
+        onToggleTheme={() => setIsDark(!isDark)}
+        isTheaterMode={isTheaterMode}
+        onToggleTheaterMode={() => setIsTheaterMode(!isTheaterMode)}
+        isSidebarPinned={isSidebarPinned}
+        onToggleSidebarPin={() => setIsSidebarPinned(!isSidebarPinned)}
       />
 
-      {/* Playlist Drawer / Modal */}
+      {/* Slide-Over Playlist Drawer (Mobile / Quick Access) */}
       {isPlaylistOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex justify-end">
-          <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 animate-in slide-in-from-right duration-200">
-            {/* Header */}
-            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex justify-end">
+          <div
+            className={`w-full max-w-md h-full shadow-2xl flex flex-col border-l ${
+              isDark ? "bg-slate-900 border-slate-800 text-slate-100" : "bg-white border-slate-200 text-slate-900"
+            }`}
+          >
+            <div
+              className={`p-4 border-b flex items-center justify-between ${
+                isDark ? "border-slate-800 bg-slate-950/60" : "border-slate-200 bg-slate-50"
+              }`}
+            >
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center">
                   <ListVideo className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-sm text-slate-900">Course Playlist</h3>
-                  <p className="text-xs text-slate-500">100 Days of Machine Learning</p>
+                  <h3 className="font-bold text-sm">Course Playlist</h3>
+                  <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                    100 Days of Machine Learning
+                  </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsPlaylistOpen(false)}
-                className="p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors cursor-pointer"
+                className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Custom URL Input */}
-            <form onSubmit={handleAddCustomUrl} className="p-3 border-b border-slate-200 bg-blue-50/50">
-              <label className="text-[11px] font-semibold text-slate-700 block mb-1">
+            <form
+              onSubmit={handleAddCustomUrl}
+              className={`p-3 border-b ${
+                isDark ? "border-slate-800 bg-slate-950/40" : "border-slate-200 bg-blue-50/50"
+              }`}
+            >
+              <label className="text-[11px] font-semibold block mb-1">
                 Load Any YouTube Video / Playlist URL:
               </label>
               <div className="flex gap-1.5">
@@ -213,11 +251,13 @@ export default function LearningStudioPage() {
                   placeholder="Paste YouTube link (https://...)"
                   value={customUrlInput}
                   onChange={(e) => setCustomUrlInput(e.target.value)}
-                  className="flex-1 text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+                  className={`flex-1 text-xs border rounded-lg px-2.5 py-1.5 focus:outline-hidden focus:ring-1 focus:ring-blue-500 ${
+                    isDark ? "bg-slate-900 border-slate-700 text-white" : "bg-white border-slate-300 text-slate-900"
+                  }`}
                 />
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors cursor-pointer shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Load</span>
@@ -225,7 +265,7 @@ export default function LearningStudioPage() {
               </div>
             </form>
 
-            {/* Playlist Video Items List */}
+            {/* Playlist Items */}
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
               {playlist.map((item, idx) => {
                 const isActive = idx === activeVideoIndex;
@@ -235,14 +275,20 @@ export default function LearningStudioPage() {
                     onClick={() => handleSelectVideo(idx)}
                     className={`p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-start gap-3 ${
                       isActive
-                        ? "bg-blue-50 border-blue-400 ring-1 ring-blue-500/20 shadow-xs"
-                        : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/80"
+                        ? isDark
+                          ? "bg-blue-950/60 border-blue-500/70 ring-1 ring-blue-500/30"
+                          : "bg-blue-50 border-blue-400 ring-1 ring-blue-500/20"
+                        : isDark
+                        ? "bg-slate-950/50 border-slate-800 hover:border-slate-700"
+                        : "bg-white border-slate-200 hover:border-slate-300"
                     }`}
                   >
                     <div
                       className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 font-bold ${
                         isActive
                           ? "bg-blue-600 text-white"
+                          : isDark
+                          ? "bg-slate-800 text-slate-400"
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
@@ -250,23 +296,17 @@ export default function LearningStudioPage() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <h4
-                        className={`font-semibold line-clamp-2 ${
-                          isActive ? "text-blue-900" : "text-slate-800"
-                        }`}
-                      >
-                        {item.title}
-                      </h4>
-                      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-500">
+                      <h4 className="font-semibold line-clamp-2">{item.title}</h4>
+                      <div className="flex items-center gap-2 mt-1.5 text-[11px] text-slate-400">
                         <span className="font-mono-timestamp">{formatTimestamp(item.duration)}</span>
                         <span>&bull;</span>
                         {item.hasTranscripts ? (
-                          <span className="text-emerald-600 font-medium flex items-center gap-1">
+                          <span className="text-emerald-400 font-medium flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" />
-                            Transcripts Ready
+                            Indexed
                           </span>
                         ) : (
-                          <span className="text-amber-600 font-medium">Video Ready</span>
+                          <span className="text-amber-400 font-medium">Stream Ready</span>
                         )}
                       </div>
                     </div>
@@ -278,46 +318,126 @@ export default function LearningStudioPage() {
         </div>
       )}
 
-      {/* Main Studio Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
-        {/* Quick Playlist Bar Banner */}
-        <div className="mb-4 bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-600/90 text-white flex items-center justify-center shrink-0 shadow-md">
-              <YouTubeIcon className="w-6 h-6 fill-current" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm tracking-tight text-white">Active Playlist:</span>
-                <span className="bg-blue-500/20 text-blue-200 border border-blue-400/30 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                  100 Days of Machine Learning
+      {/* Main 3-Zone Studio Workspace */}
+      <main
+        className={`flex-1 w-full mx-auto p-3 sm:p-5 transition-all ${
+          isTheaterMode ? "max-w-[1800px]" : "max-w-[1600px]"
+        }`}
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          {/* Left Zone: Collapsible Pinned Course Roadmap Rail (Desktop XL) */}
+          {isSidebarPinned && !isTheaterMode && (
+            <aside
+              className={`hidden xl:flex xl:col-span-2 flex-col rounded-2xl border overflow-hidden sticky top-20 max-h-[calc(100vh-6.5rem)] ${
+                isDark
+                  ? "bg-slate-900/90 border-slate-800 text-slate-100"
+                  : "bg-white border-slate-200 text-slate-900 shadow-xs"
+              }`}
+            >
+              <div
+                className={`p-3 border-b flex items-center justify-between ${
+                  isDark ? "border-slate-800 bg-slate-950/60" : "border-slate-200 bg-slate-50"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <ListVideo className="w-4 h-4 text-blue-500" />
+                  <span className="text-xs font-bold">Course Modules</span>
+                </div>
+                <span className="text-[10px] font-mono-timestamp px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 font-semibold">
+                  {activeVideoIndex + 1}/{playlist.length}
                 </span>
               </div>
-              <p className="text-xs text-slate-300 line-clamp-1 mt-0.5">
-                Current: <strong className="text-white">{activeVideo.title}</strong>
-              </p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              onClick={() => setIsPlaylistOpen(true)}
-              className="bg-white/10 hover:bg-white/20 text-white border border-white/20 text-xs font-semibold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
-            >
-              <ListVideo className="w-4 h-4 text-blue-300" />
-              <span>Browse All Lectures ({playlist.length})</span>
-            </button>
-          </div>
-        </div>
+              {/* Quick URL Add inside Rail */}
+              <form
+                onSubmit={handleAddCustomUrl}
+                className={`p-2 border-b ${isDark ? "border-slate-800/80" : "border-slate-200"}`}
+              >
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    placeholder="Paste YouTube URL..."
+                    value={customUrlInput}
+                    onChange={(e) => setCustomUrlInput(e.target.value)}
+                    className={`w-full text-[11px] rounded-lg px-2 py-1 border focus:outline-hidden ${
+                      isDark
+                        ? "bg-slate-950 border-slate-800 text-slate-200 placeholder:text-slate-500"
+                        : "bg-slate-50 border-slate-200 text-slate-800"
+                    }`}
+                  />
+                  <button
+                    type="submit"
+                    className="bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded-lg text-[11px] font-semibold cursor-pointer shrink-0"
+                    title="Load YouTube URL"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </form>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Video Player & Context Tabs (7 cols on lg screens) */}
-          <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-6">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
+                {playlist.map((item, idx) => {
+                  const isActive = idx === activeVideoIndex;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSelectVideo(idx)}
+                      className={`w-full text-left p-2.5 rounded-xl border text-xs transition-all cursor-pointer flex items-start gap-2.5 ${
+                        isActive
+                          ? isDark
+                            ? "bg-blue-950/70 border-blue-500/70 text-white shadow-sm"
+                            : "bg-blue-50 border-blue-300 text-blue-950"
+                          : isDark
+                          ? "bg-slate-950/40 border-slate-800/70 text-slate-300 hover:bg-slate-800/60"
+                          : "bg-white border-slate-200/80 text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <span
+                        className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 text-[11px] font-bold ${
+                          isActive
+                            ? "bg-blue-600 text-white"
+                            : isDark
+                            ? "bg-slate-800 text-slate-400"
+                            : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {isActive ? <Play className="w-3 h-3 fill-current" /> : item.day}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold line-clamp-2 leading-snug text-[11px]">
+                          {item.title.replace(/ \| 100 Days of Machine Learning/i, "")}
+                        </div>
+                        <div className="flex items-center justify-between mt-1 text-[10px] opacity-75">
+                          <span className="font-mono-timestamp">{formatTimestamp(item.duration)}</span>
+                          {item.hasTranscripts && (
+                            <span className="text-emerald-400 font-semibold">✔ RAG</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </aside>
+          )}
+
+          {/* Center Zone: Video Theatre & Synchronized Bottom Dock */}
+          <div
+            className={`flex flex-col gap-5 ${
+              isSidebarPinned && !isTheaterMode
+                ? "lg:col-span-7 xl:col-span-6"
+                : "lg:col-span-7 xl:col-span-8"
+            }`}
+          >
             <VideoPlayer
               currentTimestamp={currentTimestamp}
+              maxWatchedTimestamp={maxWatchedTimestamp}
               onTimeUpdate={handleTimeUpdate}
               videoSrc={activeVideo.url}
               lectureTitle={activeVideo.title}
+              chapters={chapters}
+              pauseSignal={pauseSignal}
+              isDark={isDark}
             />
 
             <ContentTabs
@@ -326,16 +446,28 @@ export default function LearningStudioPage() {
               onSeekToTimestamp={handleSeekToTimestamp}
               courseId={courseId}
               videoId={activeVideo.id}
+              onTranscriptsLoaded={setChapters}
+              onExplainSegment={handleExplainSegment}
+              isDark={isDark}
             />
           </div>
 
-          {/* Right Column: AI Learning Assistant Panel (5 cols on lg screens) */}
-          <div className="lg:col-span-5 xl:col-span-4 sticky top-20 h-[calc(100vh-6.5rem)]">
+          {/* Right Zone: Sticky AI Learning Copilot */}
+          <div
+            className={`sticky top-20 h-[calc(100vh-6.5rem)] ${
+              isSidebarPinned && !isTheaterMode
+                ? "lg:col-span-5 xl:col-span-4"
+                : "lg:col-span-5 xl:col-span-4"
+            }`}
+          >
             <AssistantPanel
               currentTimestamp={currentTimestamp}
               onSeekToTimestamp={handleSeekToTimestamp}
               courseId={courseId}
               videoId={activeVideo.id}
+              onRequestPause={() => setPauseSignal((s) => s + 1)}
+              externalPrompt={externalPrompt}
+              isDark={isDark}
             />
           </div>
         </div>

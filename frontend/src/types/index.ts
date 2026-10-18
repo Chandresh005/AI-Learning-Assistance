@@ -17,6 +17,8 @@ export interface SourceCitation {
   type: "video" | "pdf" | "ppt";
   startTime?: number;
   endTime?: number;
+  start_time?: number;
+  end_time?: number;
   page?: number;
   slide?: number;
   snippet?: string;
@@ -28,5 +30,7 @@ export interface ChatMessage {
   content: string;
   timestampSeconds?: number;
   citations?: SourceCitation[];
+  confidence?: number;
+  isSpoilerProtected?: boolean;
   createdAt: string;
 }
