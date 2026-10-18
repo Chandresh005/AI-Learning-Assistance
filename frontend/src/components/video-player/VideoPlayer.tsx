@@ -16,6 +16,14 @@ import {
 } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils";
 
+function YouTubeIcon({ className = "w-3.5 h-3.5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    </svg>
+  );
+}
+
 interface VideoPlayerProps {
   currentTimestamp: number;
   onTimeUpdate: (currentTime: number, duration: number) => void;
@@ -23,14 +31,33 @@ interface VideoPlayerProps {
   lectureTitle?: string;
 }
 
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: () => void;
+  }
+}
+
+function extractYouTubeId(urlOrId?: string): string | null {
+  if (!urlOrId) return null;
+  const trimmed = urlOrId.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+  const match = trimmed.match(/(?:v=|\/v\/|embed\/|youtu\.be\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
+  if (match) return match[1];
+  const paramMatch = trimmed.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  return paramMatch ? paramMatch[1] : null;
+}
+
 export function VideoPlayer({
   currentTimestamp,
   onTimeUpdate,
-  videoSrc = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-  lectureTitle = "Lecture 01: Attention Mechanisms & Transformers"
+  videoSrc = "https://www.youtube.com/watch?v=ZftI2fEz0Fw",
+  lectureTitle = "Day 01: What is Machine Learning? | 100 Days of Machine Learning"
 }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const ytPlayerRef = useRef<any>(null);
+  const ytIntervalRef = useRef<any>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -39,15 +66,115 @@ export function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Sync video time when seeking from outside (e.g., clicking on a transcript timestamp)
+  const ytVideoId = extractYouTubeId(videoSrc);
+
+  // 1. YouTube IFrame API Initialization
   useEffect(() => {
-    if (videoRef.current) {
+    if (!ytVideoId) {
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.destroy(); } catch {}
+        ytPlayerRef.current = null;
+      }
+      return;
+    }
+
+    let isMounted = true;
+
+    const setupPlayer = () => {
+      if (!isMounted || !window.YT || !window.YT.Player) return;
+
+      if (ytPlayerRef.current) {
+        try {
+          ytPlayerRef.current.loadVideoById(ytVideoId);
+          return;
+        } catch {}
+      }
+
+      ytPlayerRef.current = new window.YT.Player("youtube-player-element", {
+        videoId: ytVideoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 1,
+          rel: 0,
+          modestbranding: 1,
+          playsinline: 1
+        },
+        events: {
+          onReady: (event: any) => {
+            if (!isMounted) return;
+            const dur = event.target.getDuration() || 0;
+            if (dur > 0) {
+              setDuration(dur);
+              onTimeUpdate(event.target.getCurrentTime() || 0, dur);
+            }
+          },
+          onStateChange: (event: any) => {
+            if (!isMounted) return;
+            // 1: PLAYING, 2: PAUSED, 0: ENDED
+            if (event.data === 1) {
+              setIsPlaying(true);
+              if (ytIntervalRef.current) clearInterval(ytIntervalRef.current);
+              ytIntervalRef.current = setInterval(() => {
+                if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+                  const cur = ytPlayerRef.current.getCurrentTime() || 0;
+                  const dur = ytPlayerRef.current.getDuration() || duration;
+                  if (dur > 0) setDuration(dur);
+                  onTimeUpdate(cur, dur);
+                }
+              }, 250);
+            } else {
+              setIsPlaying(false);
+              if (ytIntervalRef.current) {
+                clearInterval(ytIntervalRef.current);
+                ytIntervalRef.current = null;
+              }
+              if (ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+                const cur = ytPlayerRef.current.getCurrentTime() || 0;
+                const dur = ytPlayerRef.current.getDuration() || duration;
+                onTimeUpdate(cur, dur);
+              }
+            }
+          }
+        }
+      });
+    };
+
+    if (!window.YT) {
+      const tag = document.createElement("script");
+      tag.src = "https://www.youtube.com/iframe_api";
+      const firstScriptTag = document.getElementsByTagName("script")[0];
+      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+      window.onYouTubeIframeAPIReady = () => {
+        setupPlayer();
+      };
+    } else {
+      setupPlayer();
+    }
+
+    return () => {
+      isMounted = false;
+      if (ytIntervalRef.current) {
+        clearInterval(ytIntervalRef.current);
+        ytIntervalRef.current = null;
+      }
+    };
+  }, [ytVideoId]);
+
+  // 2. Sync playback time when seeking from outside (e.g. clicking a citation)
+  useEffect(() => {
+    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+      const cur = ytPlayerRef.current.getCurrentTime();
+      if (Math.abs(cur - currentTimestamp) > 1.2) {
+        ytPlayerRef.current.seekTo(currentTimestamp, true);
+      }
+    } else if (videoRef.current) {
       if (Math.abs(videoRef.current.currentTime - currentTimestamp) > 1.0) {
         videoRef.current.currentTime = currentTimestamp;
       }
     }
-  }, [currentTimestamp]);
+  }, [currentTimestamp, ytVideoId]);
 
+  // HTML5 Video handlers
   const handleLoadedMetadata = () => {
     if (videoRef.current) {
       const dur = videoRef.current.duration;
@@ -65,6 +192,17 @@ export function VideoPlayer({
   };
 
   const togglePlay = () => {
+    if (ytVideoId && ytPlayerRef.current) {
+      if (isPlaying) {
+        ytPlayerRef.current.pauseVideo();
+        setIsPlaying(false);
+      } else {
+        ytPlayerRef.current.playVideo();
+        setIsPlaying(true);
+      }
+      return;
+    }
+
     if (!videoRef.current) return;
     if (isPlaying) {
       videoRef.current.pause();
@@ -77,6 +215,11 @@ export function VideoPlayer({
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const targetTime = parseFloat(e.target.value);
+    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.seekTo) {
+      ytPlayerRef.current.seekTo(targetTime, true);
+      onTimeUpdate(targetTime, duration);
+      return;
+    }
     if (videoRef.current) {
       videoRef.current.currentTime = targetTime;
       onTimeUpdate(targetTime, duration);
@@ -84,6 +227,13 @@ export function VideoPlayer({
   };
 
   const skipTime = (deltaSeconds: number) => {
+    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.getCurrentTime) {
+      const cur = ytPlayerRef.current.getCurrentTime() || 0;
+      const newTime = Math.max(0, Math.min(cur + deltaSeconds, duration || 10000));
+      ytPlayerRef.current.seekTo(newTime, true);
+      onTimeUpdate(newTime, duration);
+      return;
+    }
     if (!videoRef.current) return;
     const newTime = Math.max(0, Math.min(videoRef.current.currentTime + deltaSeconds, duration));
     videoRef.current.currentTime = newTime;
@@ -91,25 +241,31 @@ export function VideoPlayer({
   };
 
   const handleRateChange = (rate: number) => {
+    if (ytVideoId && ytPlayerRef.current && ytPlayerRef.current.setPlaybackRate) {
+      ytPlayerRef.current.setPlaybackRate(rate);
+      setPlaybackRate(rate);
+      return;
+    }
     if (!videoRef.current) return;
     videoRef.current.playbackRate = rate;
     setPlaybackRate(rate);
   };
 
   const toggleMute = () => {
+    if (ytVideoId && ytPlayerRef.current) {
+      if (isMuted) {
+        ytPlayerRef.current.unMute();
+        setIsMuted(false);
+      } else {
+        ytPlayerRef.current.mute();
+        setIsMuted(true);
+      }
+      return;
+    }
     if (!videoRef.current) return;
     const newMuteState = !isMuted;
     videoRef.current.muted = newMuteState;
     setIsMuted(newMuteState);
-  };
-
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
-    if (videoRef.current) {
-      videoRef.current.volume = val;
-      setVolume(val);
-      setIsMuted(val === 0);
-    }
   };
 
   const toggleFullscreen = () => {
@@ -130,20 +286,26 @@ export function VideoPlayer({
         ref={containerRef}
         className="relative bg-slate-950 rounded-2xl overflow-hidden shadow-lg border border-slate-800 group"
       >
-        <video
-          ref={videoRef}
-          src={videoSrc}
-          className="w-full aspect-video object-contain bg-black"
-          onLoadedMetadata={handleLoadedMetadata}
-          onTimeUpdate={handleTimeUpdate}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onClick={togglePlay}
-          playsInline
-        />
+        {ytVideoId ? (
+          <div className="w-full aspect-video bg-black flex items-center justify-center">
+            <div id="youtube-player-element" className="w-full h-full" />
+          </div>
+        ) : (
+          <video
+            ref={videoRef}
+            src={videoSrc}
+            className="w-full aspect-video object-contain bg-black"
+            onLoadedMetadata={handleLoadedMetadata}
+            onTimeUpdate={handleTimeUpdate}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onClick={togglePlay}
+            playsInline
+          />
+        )}
 
-        {/* Play/Pause Center Overlay Button when paused */}
-        {!isPlaying && (
+        {/* Play/Pause Center Overlay Button when paused (HTML5 only) */}
+        {!ytVideoId && !isPlaying && (
           <button
             onClick={togglePlay}
             className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-blue-600/90 text-white flex items-center justify-center hover:scale-110 transition-transform shadow-xl backdrop-blur-xs cursor-pointer"
@@ -153,8 +315,8 @@ export function VideoPlayer({
           </button>
         )}
 
-        {/* Controls Toolbar Bar */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 flex flex-col gap-2 transition-opacity">
+        {/* Video Scrubber & Playback Controls Bar */}
+        <div className="bg-slate-900 border-t border-slate-800 p-3 flex flex-col gap-2">
           {/* Progress / Scrubber Bar */}
           <div className="relative w-full flex items-center group/scrubber cursor-pointer">
             <input
@@ -178,64 +340,64 @@ export function VideoPlayer({
               <button
                 onClick={togglePlay}
                 className="hover:text-blue-400 transition-colors cursor-pointer"
-                aria-label={isPlaying ? "Pause" : "Play"}
+                title={isPlaying ? "Pause" : "Play"}
               >
-                {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current" />}
+                {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
               </button>
 
-              {/* Rewind 10s */}
+              {/* Skip -10s */}
               <button
                 onClick={() => skipTime(-10)}
-                className="hover:text-blue-400 transition-colors cursor-pointer flex items-center gap-0.5"
-                title="Rewind 10 seconds"
+                className="hover:text-blue-400 transition-colors cursor-pointer"
+                title="Rewind 10s"
               >
                 <RotateCcw className="w-4 h-4" />
-                <span className="text-[10px]">10s</span>
               </button>
 
-              {/* Fast Forward 10s */}
+              {/* Skip +10s */}
               <button
                 onClick={() => skipTime(10)}
-                className="hover:text-blue-400 transition-colors cursor-pointer flex items-center gap-0.5"
-                title="Forward 10 seconds"
+                className="hover:text-blue-400 transition-colors cursor-pointer"
+                title="Forward 10s"
               >
                 <RotateCw className="w-4 h-4" />
-                <span className="text-[10px]">10s</span>
+              </button>
+
+              {/* Volume / Mute */}
+              <button
+                onClick={toggleMute}
+                className="hover:text-blue-400 transition-colors cursor-pointer"
+                title={isMuted ? "Unmute" : "Mute"}
+              >
+                {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
               </button>
 
               {/* Timestamp Counter */}
-              <div className="flex items-center gap-1 font-mono-timestamp text-slate-200 ml-2">
-                <span className="font-semibold text-white">{formatTimestamp(currentTimestamp)}</span>
-                <span className="text-slate-400">/</span>
+              <div className="font-mono-timestamp text-slate-300 font-medium text-xs ml-1 flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                <span>{formatTimestamp(currentTimestamp)}</span>
+                <span className="text-slate-500">/</span>
                 <span className="text-slate-400">{formatTimestamp(duration)}</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              {/* Volume Slider */}
-              <div className="flex items-center gap-1.5">
-                <button onClick={toggleMute} className="hover:text-blue-400 cursor-pointer">
-                  {isMuted || volume === 0 ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                </button>
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={isMuted ? 0 : volume}
-                  onChange={handleVolumeChange}
-                  className="w-16 h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                />
-              </div>
+            <div className="flex items-center gap-3">
+              {/* YouTube indicator */}
+              {ytVideoId && (
+                <div className="flex items-center gap-1 text-[11px] font-medium text-red-400 bg-red-950/60 border border-red-800/40 px-2 py-0.5 rounded-full">
+                  <YouTubeIcon className="w-3.5 h-3.5" />
+                  <span>YouTube Stream</span>
+                </div>
+              )}
 
-              {/* Playback Speed selector */}
+              {/* Speed Selector */}
               <div className="flex items-center gap-1 bg-slate-800/80 rounded-md px-1.5 py-0.5 border border-slate-700">
-                {[0.75, 1, 1.25, 1.5, 2].map((rate) => (
+                {[1, 1.25, 1.5].map((rate) => (
                   <button
                     key={rate}
                     onClick={() => handleRateChange(rate)}
-                    className={`px-1 py-0.5 text-[10px] rounded cursor-pointer ${
-                      playbackRate === rate ? "bg-blue-600 text-white font-bold" : "text-slate-400 hover:text-white"
+                    className={`px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                      playbackRate === rate ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"
                     }`}
                   >
                     {rate}x
@@ -256,43 +418,67 @@ export function VideoPlayer({
         </div>
       </div>
 
-      {/* RAG Knowledge Retrieval Boundary Status Card */}
-      <div className="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs flex flex-col gap-2">
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-slate-800">Temporal Knowledge Boundary:</span>
-            <span className="font-mono-timestamp bg-slate-100 text-slate-900 px-2 py-0.5 rounded font-bold border border-slate-200">
+      {/* Temporal Knowledge Horizon & Verification Bar */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
+        <div className="flex items-center justify-between text-xs mb-2">
+          <div className="flex items-center gap-2 font-medium text-slate-800">
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+            <span>Temporal Knowledge Horizon:</span>
+            <span className="font-mono-timestamp font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
               00:00 &rarr; {formatTimestamp(currentTimestamp)}
             </span>
           </div>
-          <span className="text-[11px] text-slate-500">Enforced by Retrieval Filter</span>
+
+          <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-1 text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>0% Future Leakage Invariant</span>
+            </div>
+          </div>
         </div>
 
-        {/* Visual Partition Timeline */}
-        <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden flex border border-slate-200 relative">
-          {/* Permitted Knowledge (Watched) */}
+        {/* Visual Progress Boundary Bar */}
+        <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200 flex">
+          {/* Accessible Knowledge (Past -> Current) */}
           <div
-            className="h-full bg-emerald-500 transition-all duration-200 relative group flex items-center justify-end"
-            style={{ width: `${Math.max(2, progressPercent)}%` }}
-            title={`Permitted Evidence Window: 00:00 to ${formatTimestamp(currentTimestamp)}`}
-          />
-          {/* Future Content (Excluded) */}
+            className="h-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-200 flex items-center justify-end pr-1"
+            style={{ width: `${progressPercent}%` }}
+          >
+            {progressPercent > 8 && (
+              <span className="text-[9px] text-white font-bold tracking-wider uppercase font-mono-timestamp">
+                Accessible
+              </span>
+            )}
+          </div>
+
+          {/* Locked Knowledge (Current -> Future) */}
           <div
-            className="h-full bg-rose-100/70 flex-1 relative border-l-2 border-rose-500"
-            title={`Future Content Protected: ${formatTimestamp(currentTimestamp)} to ${formatTimestamp(duration)}`}
-          />
+            className="h-full bg-slate-200 transition-all duration-200 relative overflow-hidden"
+            style={{ width: `${100 - progressPercent}%` }}
+          >
+            <div
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage:
+                  "repeating-linear-gradient(45deg, #000, #000 6px, transparent 6px, transparent 12px)"
+              }}
+            />
+            {100 - progressPercent > 18 && (
+              <span className="absolute inset-0 flex items-center pl-2 text-[9px] text-slate-500 font-medium">
+                Locked Future Scope
+              </span>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
-          <div className="flex items-center gap-1 text-emerald-700 font-medium">
-            <ShieldCheck className="w-3.5 h-3.5" />
-            <span>Permitted RAG Retrieval: 00:00 &ndash; {formatTimestamp(currentTimestamp)}</span>
-          </div>
-          <div className="flex items-center gap-1 text-rose-600 font-medium">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span>Future Video Leakage: Blocked</span>
-          </div>
+        <div className="flex items-center justify-between mt-2 text-[11px] text-slate-500">
+          <span className="flex items-center gap-1">
+            <Film className="w-3.5 h-3.5 text-slate-400" />
+            <span>Lecture: <strong>{lectureTitle}</strong></span>
+          </span>
+          <span className="text-slate-400">
+            {formatTimestamp(currentTimestamp)} watched of {formatTimestamp(duration)} total
+          </span>
         </div>
       </div>
     </div>

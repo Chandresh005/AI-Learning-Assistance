@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   FileText,
   Presentation,
@@ -80,6 +80,39 @@ export function ContentTabs({
       text: "Multi-head attention takes this further by projecting queries, keys, and values into multiple representation subspaces, enabling the model to jointly attend to information from different representation positions."
     }
   ];
+
+  // Dynamic transcripts from backend
+  const [transcripts, setTranscripts] = useState<TranscriptChunk[]>([]);
+  const [isLoadingTranscripts, setIsLoadingTranscripts] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTranscripts = async () => {
+      setIsLoadingTranscripts(true);
+      try {
+        const res = await fetch(`http://localhost:8000/api/videos/${videoId}/transcripts`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data) && data.length > 0) {
+            setTranscripts(data.map((d: any) => ({
+              id: d.id,
+              startTime: d.start_time,
+              endTime: d.end_time,
+              text: d.text
+            })));
+            setIsLoadingTranscripts(false);
+            return;
+          }
+        }
+      } catch {}
+      if (isMounted) {
+        setTranscripts(sampleTranscripts);
+        setIsLoadingTranscripts(false);
+      }
+    };
+    fetchTranscripts();
+    return () => { isMounted = false; };
+  }, [videoId]);
 
   // Quiz state
   const [quizQuestions, setQuizQuestions] = useState<QuizItem[]>([]);
@@ -375,7 +408,7 @@ export function ContentTabs({
             </div>
 
             <div className="space-y-2">
-              {sampleTranscripts.map((chunk) => {
+              {(transcripts.length > 0 ? transcripts : sampleTranscripts).map((chunk) => {
                 const isActive =
                   currentTimestamp >= chunk.startTime && currentTimestamp <= chunk.endTime;
                 const isPast = currentTimestamp > chunk.endTime;
