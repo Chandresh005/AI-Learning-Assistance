@@ -43,6 +43,8 @@ interface QuizItem {
   citations?: any[];
 }
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
+
 export function ContentTabs({
   currentTimestamp,
   duration,
@@ -93,7 +95,7 @@ export function ContentTabs({
     const fetchTranscripts = async () => {
       setIsLoadingTranscripts(true);
       try {
-        const res = await fetch(`http://localhost:8000/api/videos/${videoId}/transcripts`);
+        const res = await fetch(`${API_BASE}/videos/${videoId}/transcripts`);
         if (res.ok) {
           const data = await res.json();
           if (isMounted && Array.isArray(data) && data.length > 0) {
@@ -142,7 +144,7 @@ export function ContentTabs({
     setSelectedAnswers({});
 
     try {
-      const res = await fetch("http://localhost:8000/api/quiz/generate", {
+      const res = await fetch(`${API_BASE}/quiz/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -202,7 +204,7 @@ export function ContentTabs({
     }));
 
     try {
-      const res = await fetch("http://localhost:8000/api/quiz/submit", {
+      const res = await fetch(`${API_BASE}/quiz/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -244,7 +246,7 @@ export function ContentTabs({
     setIsInterviewLoading(true);
     setScorecard(null);
     try {
-      const res = await fetch("http://localhost:8000/api/interview/start", {
+      const res = await fetch(`${API_BASE}/interview/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -279,7 +281,7 @@ export function ContentTabs({
     setIsInterviewLoading(true);
 
     try {
-      const res = await fetch("http://localhost:8000/api/interview/respond", {
+      const res = await fetch(`${API_BASE}/interview/respond`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

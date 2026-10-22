@@ -1,5 +1,6 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
+from app.schemas.jev import JevVerificationVerdict
 
 
 class CitationSource(BaseModel):
@@ -25,3 +26,4 @@ class AskResponse(BaseModel):
     confidence: float = 1.0
     timestamp_scope: str
     conversation_id: str
+    jev_verdict: Optional[JevVerificationVerdict] = None

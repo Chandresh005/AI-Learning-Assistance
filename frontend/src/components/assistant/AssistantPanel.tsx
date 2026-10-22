@@ -92,7 +92,8 @@ export function AssistantPanel({
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/ask", {
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || "/api";
+      const response = await fetch(`${apiBase}/ask/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -129,6 +130,7 @@ export function AssistantPanel({
           citations: normalizedCitations,
           confidence: data.confidence,
           isSpoilerProtected,
+          jevVerdict: data.jev_verdict || undefined,
           createdAt: new Date().toISOString()
         };
         setMessages((prev) => [...prev, assistantMessage]);
@@ -363,6 +365,33 @@ export function AssistantPanel({
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* Inline JEV 5-Gate Verification Badge */}
+              {msg.role === "assistant" && msg.jevVerdict && (
+                <div
+                  className={`mt-2.5 pt-2 border-t flex flex-wrap items-center justify-between gap-2 text-[10px] ${
+                    isDark ? "border-slate-700/60" : "border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <ShieldCheck className="w-3 h-3" />
+                      JEV {msg.jevVerdict.verdict} ({msg.jevVerdict.overall_score}%)
+                    </span>
+                    <span className="font-mono-timestamp opacity-80">
+                      {msg.jevVerdict.temporal_leakage_rate}% Leakage &bull;{" "}
+                      {msg.jevVerdict.blocked_future_chunks_count} Future Segs Locked
+                    </span>
+                  </div>
+                  <a
+                    href="/jev"
+                    className="font-semibold text-blue-400 hover:text-blue-300 underline"
+                    title="Inspect 5-Gate JEV Audit Dashboard"
+                  >
+                    Audit Gates &rarr;
+                  </a>
                 </div>
               )}
             </div>

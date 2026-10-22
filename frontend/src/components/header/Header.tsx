@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Clock3,
   GraduationCap,
@@ -11,9 +12,14 @@ import {
   Maximize2,
   Minimize2,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Home,
+  LogIn,
+  LogOut,
+  UserRound
 } from "lucide-react";
 import { formatTimestamp } from "@/lib/utils";
+import { AuthUser, getStoredSession, setStoredSession } from "@/lib/auth";
 
 function YouTubeIcon({ className = "w-3 h-3" }: { className?: string }) {
   return (
@@ -36,6 +42,7 @@ interface HeaderProps {
   onToggleTheaterMode?: () => void;
   isSidebarPinned?: boolean;
   onToggleSidebarPin?: () => void;
+  onBackToHome?: () => void;
 }
 
 export function Header({
@@ -50,9 +57,30 @@ export function Header({
   isTheaterMode = false,
   onToggleTheaterMode,
   isSidebarPinned = true,
-  onToggleSidebarPin
+  onToggleSidebarPin,
+  onBackToHome
 }: HeaderProps) {
   const progressPercent = duration > 0 ? Math.min(100, Math.round((currentTimestamp / duration) * 100)) : 0;
+  const [user, setUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    const syncAuth = () => {
+      const session = getStoredSession();
+      setUser(session?.user || null);
+    };
+    syncAuth();
+    window.addEventListener("ila-auth-change", syncAuth);
+    window.addEventListener("storage", syncAuth);
+    return () => {
+      window.removeEventListener("ila-auth-change", syncAuth);
+      window.removeEventListener("storage", syncAuth);
+    };
+  }, []);
+
+  const handleSignOut = () => {
+    setStoredSession(null);
+    setUser(null);
+  };
 
   return (
     <header
@@ -63,8 +91,8 @@ export function Header({
       }`}
     >
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-        {/* Left: Sidebar Toggle & Brand */}
-        <div className="flex items-center gap-3 min-w-0">
+        {/* Left: Sidebar Toggle, Home Link & Brand */}
+        <div className="flex items-center gap-2.5 min-w-0">
           {onToggleSidebarPin && (
             <button
               onClick={onToggleSidebarPin}
@@ -77,6 +105,34 @@ export function Header({
             >
               {isSidebarPinned ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeftOpen className="w-4 h-4" />}
             </button>
+          )}
+
+          {onBackToHome ? (
+            <button
+              onClick={onBackToHome}
+              className={`flex items-center gap-1.5 px-2.5 h-9 rounded-xl border text-xs font-semibold transition-colors cursor-pointer shrink-0 ${
+                isDark
+                  ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800"
+                  : "bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-200"
+              }`}
+              title="Return to Home Page"
+            >
+              <Home className="w-3.5 h-3.5 text-blue-500" />
+              <span className="hidden sm:inline">Home</span>
+            </button>
+          ) : (
+            <Link
+              href="/"
+              className={`flex items-center gap-1.5 px-2.5 h-9 rounded-xl border text-xs font-semibold transition-colors shrink-0 ${
+                isDark
+                  ? "bg-slate-900 border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800"
+                  : "bg-slate-100 border-slate-200 text-slate-700 hover:text-slate-900 hover:bg-slate-200"
+              }`}
+              title="Return to Home Page"
+            >
+              <Home className="w-3.5 h-3.5 text-blue-500" />
+              <span className="hidden sm:inline">Home</span>
+            </Link>
           )}
 
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/25 shrink-0">
@@ -99,7 +155,7 @@ export function Header({
                 <span>YouTube Sync</span>
               </span>
             </div>
-            <p className={`text-xs truncate max-w-[240px] sm:max-w-md ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            <p className={`text-xs truncate max-w-[200px] sm:max-w-md ${isDark ? "text-slate-400" : "text-slate-500"}`}>
               {courseTitle} &bull;{" "}
               <span className={isDark ? "text-slate-200 font-medium" : "text-slate-800 font-semibold"}>
                 {lectureTitle}
@@ -108,8 +164,8 @@ export function Header({
           </div>
         </div>
 
-        {/* Center/Right: Live Knowledge Boundary, Controls & Progress */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Center/Right: Live Knowledge Boundary, Controls, Auth & Progress */}
+        <div className="flex items-center gap-2 sm:gap-2.5">
           {/* Active Knowledge Boundary Pill */}
           <div
             className={`hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs border ${
@@ -130,10 +186,14 @@ export function Header({
             >
               00:00 &rarr; {formatTimestamp(currentTimestamp)}
             </span>
-            <span className="flex items-center gap-1 text-[11px] text-emerald-500 font-semibold pl-1">
+            <Link
+              href="/jev"
+              className="flex items-center gap-1 text-[11px] text-emerald-500 hover:text-emerald-400 font-semibold pl-1 underline decoration-emerald-500/40"
+              title="Open JEV (Judge & Evaluation Verification) Audit Center"
+            >
               <ShieldCheck className="w-3.5 h-3.5" />
-              0% Leakage
-            </span>
+              0% Leakage (JEV)
+            </Link>
           </div>
 
           {/* Playlist Drawer Button (Mobile/Tablet or Quick Access) */}
@@ -189,7 +249,7 @@ export function Header({
           )}
 
           {/* Watch Progress Indicator */}
-          <div className="hidden sm:flex items-center gap-2 min-w-[85px] pl-1">
+          <div className="hidden sm:flex items-center gap-2 min-w-[76px] pl-1">
             <div className="text-right">
               <div className={`text-[10px] font-medium uppercase tracking-wider ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                 Watched
@@ -197,7 +257,7 @@ export function Header({
               <div className="text-xs font-bold">{progressPercent}%</div>
             </div>
             <div
-              className={`w-12 h-2 rounded-full overflow-hidden border ${
+              className={`w-10 h-2 rounded-full overflow-hidden border ${
                 isDark ? "bg-slate-900 border-slate-800" : "bg-slate-100 border-slate-200"
               }`}
             >
@@ -207,6 +267,39 @@ export function Header({
               />
             </div>
           </div>
+
+          {/* Auth User Pill or Sign In CTA */}
+          {user ? (
+            <div
+              className={`flex items-center gap-2 pl-2.5 pr-1.5 py-1 rounded-xl border text-xs ${
+                isDark
+                  ? "bg-slate-900/90 border-slate-800 text-slate-200"
+                  : "bg-slate-100 border-slate-200 text-slate-800"
+              }`}
+            >
+              <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-600 to-cyan-500 text-white flex items-center justify-center font-bold text-[11px] shrink-0">
+                {user.name.charAt(0).toUpperCase()}
+              </div>
+              <span className="hidden md:inline font-semibold max-w-[110px] truncate">{user.name}</span>
+              <button
+                onClick={handleSignOut}
+                className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                  isDark ? "hover:bg-slate-800 text-slate-400 hover:text-rose-400" : "hover:bg-slate-200 text-slate-500 hover:text-rose-600"
+                }`}
+                title="Sign out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/20 transition-colors shrink-0"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
+          )}
         </div>
       </div>
     </header>

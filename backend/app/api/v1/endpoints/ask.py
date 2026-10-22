@@ -7,6 +7,7 @@ from app.models.conversation import Conversation, Message
 from app.schemas.ask import AskRequest, AskResponse, CitationSource
 from app.services.retrieval import retrieve_permitted_evidence
 from app.services.llm import generate_grounded_answer, format_seconds_to_min_sec
+from app.services.jev_judge import evaluate_rag_verdict
 
 router = APIRouter()
 
@@ -15,7 +16,7 @@ router = APIRouter()
 async def ask_question(request: AskRequest, db: AsyncSession = Depends(get_db)):
     """
     RAG endpoint enforcing strict temporal knowledge boundary [00:00 -> request.timestamp]
-    and returning grounded answers with verifiable source citations.
+    and returning grounded answers with verifiable source citations and JEV audit verdict.
     """
     conversation_id = request.conversation_id or str(uuid.uuid4())
 
@@ -48,6 +49,18 @@ async def ask_question(request: AskRequest, db: AsyncSession = Depends(get_db)):
         current_timestamp=request.timestamp,
         evidence_chunks=evidence_chunks,
         conversation_history=conv_history
+    )
+
+    # 3b. Compute inline 5-Gate JEV Verification Verdict
+    jev_verdict, _ = await evaluate_rag_verdict(
+        course_id=request.course_id,
+        video_id=request.video_id,
+        current_timestamp=request.timestamp,
+        question=request.question,
+        answer=answer_text,
+        citations=citations_list,
+        evidence_chunks=evidence_chunks,
+        db=db
     )
 
     # 4. Save to conversation history
@@ -99,7 +112,8 @@ async def ask_question(request: AskRequest, db: AsyncSession = Depends(get_db)):
         sources=sources_response,
         confidence=confidence,
         timestamp_scope=time_scope_str,
-        conversation_id=conversation_id
+        conversation_id=conversation_id,
+        jev_verdict=jev_verdict
     )
 
 

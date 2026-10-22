@@ -24,6 +24,25 @@ export interface SourceCitation {
   snippet?: string;
 }
 
+export interface JevGateResult {
+  gate_id: number;
+  name: string;
+  passed: boolean;
+  score: number;
+  detail: string;
+}
+
+export interface JevVerificationVerdict {
+  verdict: "VERIFIED" | "REFUSAL_VERIFIED" | "WARNING" | "VIOLATION";
+  overall_score: number;
+  temporal_leakage_rate: number;
+  groundedness_score: number;
+  citation_precision: number;
+  permitted_chunks_count: number;
+  blocked_future_chunks_count: number;
+  gates: JevGateResult[];
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -32,5 +51,6 @@ export interface ChatMessage {
   citations?: SourceCitation[];
   confidence?: number;
   isSpoilerProtected?: boolean;
+  jevVerdict?: JevVerificationVerdict;
   createdAt: string;
 }

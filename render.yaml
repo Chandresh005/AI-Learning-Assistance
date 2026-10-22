@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: ai-learning-assistant
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: SECRET_KEY
+        generateValue: true
+      - key: BACKEND_INTERNAL_URL
+        value: http://127.0.0.1:8000

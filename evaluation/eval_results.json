@@ -1,4 +1,6 @@
 {
+  "run_id": "jev-run-ea1f7a71",
+  "executed_at": "2026-10-22T18:02:12.956543+00:00",
   "total_scenarios": 7,
   "passed_scenarios": 7,
   "pass_rate_percentage": 100.0,
@@ -6,56 +8,406 @@
   "citation_accuracy_percentage": 100.0,
   "retrieval_accuracy_percentage": 100.0,
   "hallucination_rate": 0.0,
-  "average_latency_ms": 28.1,
+  "average_latency_ms": 11.82,
   "results": [
     {
       "test_id": 1,
-      "name": "Before-Timestamp Retrieval",
+      "category": "Temporal Recall",
+      "name": "Before-Timestamp Video Retrieval",
       "passed": true,
-      "latency_ms": 39.32,
-      "detail": "Accurately retrieved video chunk from covered range [120s - 240s]."
+      "latency_ms": 25.69,
+      "timestamp_tested": 600.0,
+      "question": "What does the attention mechanism calculate?",
+      "answer_preview": "Based on the material covered up to 10:00 (Video (02:00 - 04:00)):\n\nThe attention mechanism calculates dot-product affinities between query tokens and key vectors.\n\n(This explanation is strictly bounded to concepts intro...",
+      "detail": "Retrieved covered video segment [02:00\u201304:00] when learner paused at 10:00.",
+      "verdict": {
+        "verdict": "VERIFIED",
+        "overall_score": 96.4,
+        "temporal_leakage_rate": 0.0,
+        "groundedness_score": 82.0,
+        "citation_precision": 100.0,
+        "permitted_chunks_count": 1,
+        "blocked_future_chunks_count": 1,
+        "gates": [
+          {
+            "gate_id": 1,
+            "name": "Temporal Horizon Guard",
+            "passed": true,
+            "score": 100.0,
+            "detail": "All 1 video citation(s) strictly within [00:00 -> 10:00]."
+          },
+          {
+            "gate_id": 2,
+            "name": "Zero Spoiler Leakage",
+            "passed": true,
+            "score": 100.0,
+            "detail": "0.0% future spoiler leakage across 1 locked future segment(s)."
+          },
+          {
+            "gate_id": 3,
+            "name": "Multimodal Citation Integrity",
+            "passed": true,
+            "score": 100.0,
+            "detail": "1/1 multimodal source citation(s) verified with valid bounds/anchors."
+          },
+          {
+            "gate_id": 4,
+            "name": "Evidence Faithfulness",
+            "passed": true,
+            "score": 82.0,
+            "detail": "Answer claims grounded in 1 permitted evidence chunk(s) (82.0% faithfulness)."
+          },
+          {
+            "gate_id": 5,
+            "name": "Refusal Calibration",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Evidence present and synthesized into grounded explanation."
+          }
+        ]
+      }
     },
     {
       "test_id": 2,
+      "category": "Zero Spoiler Guard",
       "name": "Future-Content Leakage Prevention",
       "passed": true,
-      "latency_ms": 21.55,
-      "detail": "Strictly blocked video content taught at 35:00 from student at 10:00."
+      "latency_ms": 8.34,
+      "timestamp_tested": 600.0,
+      "question": "What is Grouped-Query Attention (GQA) and how does it optimize KV cache?",
+      "answer_preview": "Based on the material covered up to 10:00 (Video (02:00 - 04:00)):\n\nThe attention mechanism calculates dot-product affinities between query tokens and key vectors.\n\n(This explanation is strictly bounded to concepts intro...",
+      "detail": "Strictly blocked GQA lecture segment taught at 35:00 when learner paused at 10:00.",
+      "verdict": {
+        "verdict": "VERIFIED",
+        "overall_score": 96.4,
+        "temporal_leakage_rate": 0.0,
+        "groundedness_score": 82.0,
+        "citation_precision": 100.0,
+        "permitted_chunks_count": 1,
+        "blocked_future_chunks_count": 1,
+        "gates": [
+          {
+            "gate_id": 1,
+            "name": "Temporal Horizon Guard",
+            "passed": true,
+            "score": 100.0,
+            "detail": "All 1 video citation(s) strictly within [00:00 -> 10:00]."
+          },
+          {
+            "gate_id": 2,
+            "name": "Zero Spoiler Leakage",
+            "passed": true,
+            "score": 100.0,
+            "detail": "0.0% future spoiler leakage across 1 locked future segment(s)."
+          },
+          {
+            "gate_id": 3,
+            "name": "Multimodal Citation Integrity",
+            "passed": true,
+            "score": 100.0,
+            "detail": "1/1 multimodal source citation(s) verified with valid bounds/anchors."
+          },
+          {
+            "gate_id": 4,
+            "name": "Evidence Faithfulness",
+            "passed": true,
+            "score": 82.0,
+            "detail": "Answer claims grounded in 1 permitted evidence chunk(s) (82.0% faithfulness)."
+          },
+          {
+            "gate_id": 5,
+            "name": "Refusal Calibration",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Evidence present and synthesized into grounded explanation."
+          }
+        ]
+      }
     },
     {
       "test_id": 3,
+      "category": "Multimodal PDF",
       "name": "PDF Page Citation Verification",
       "passed": true,
-      "latency_ms": 22.42,
-      "detail": "Retrieved PDF page 8 citation for gradient flow explanation."
+      "latency_ms": 10.11,
+      "timestamp_tested": 600.0,
+      "question": "Why are residual connections used in transformer sub-layers?",
+      "answer_preview": "Based on the material covered up to 10:00 (Course PDF (Page 8)):\n\nResidual connections around each sub-layer allow gradients to flow directly during backpropagation.\n\n(This explanation is strictly bounded to concepts int...",
+      "detail": "Verified PDF Page 8 citation for residual gradient flow explanation.",
+      "verdict": {
+        "verdict": "VERIFIED",
+        "overall_score": 96.4,
+        "temporal_leakage_rate": 0.0,
+        "groundedness_score": 82.0,
+        "citation_precision": 100.0,
+        "permitted_chunks_count": 1,
+        "blocked_future_chunks_count": 1,
+        "gates": [
+          {
+            "gate_id": 1,
+            "name": "Temporal Horizon Guard",
+            "passed": true,
+            "score": 100.0,
+            "detail": "All 0 video citation(s) strictly within [00:00 -> 10:00]."
+          },
+          {
+            "gate_id": 2,
+            "name": "Zero Spoiler Leakage",
+            "passed": true,
+            "score": 100.0,
+            "detail": "0.0% future spoiler leakage across 1 locked future segment(s)."
+          },
+          {
+            "gate_id": 3,
+            "name": "Multimodal Citation Integrity",
+            "passed": true,
+            "score": 100.0,
+            "detail": "1/1 multimodal source citation(s) verified with valid bounds/anchors."
+          },
+          {
+            "gate_id": 4,
+            "name": "Evidence Faithfulness",
+            "passed": true,
+            "score": 82.0,
+            "detail": "Answer claims grounded in 1 permitted evidence chunk(s) (82.0% faithfulness)."
+          },
+          {
+            "gate_id": 5,
+            "name": "Refusal Calibration",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Evidence present and synthesized into grounded explanation."
+          }
+        ]
+      }
     },
     {
       "test_id": 4,
+      "category": "Multimodal PPT",
       "name": "PPT Slide Citation Verification",
       "passed": true,
-      "latency_ms": 22.59,
-      "detail": "Retrieved PPT slide 14 citation for sine/cosine formula."
+      "latency_ms": 9.44,
+      "timestamp_tested": 600.0,
+      "question": "How are positional encoding formulas constructed?",
+      "answer_preview": "Based on the material covered up to 10:00 (Lecture Slides (Slide 14)):\n\nPositional encoding formulas use sine and cosine functions of different frequencies.\n\n(This explanation is strictly bounded to concepts introduced b...",
+      "detail": "Verified PPT Slide 14 citation for sine/cosine positional encoding.",
+      "verdict": {
+        "verdict": "VERIFIED",
+        "overall_score": 96.4,
+        "temporal_leakage_rate": 0.0,
+        "groundedness_score": 82.0,
+        "citation_precision": 100.0,
+        "permitted_chunks_count": 1,
+        "blocked_future_chunks_count": 1,
+        "gates": [
+          {
+            "gate_id": 1,
+            "name": "Temporal Horizon Guard",
+            "passed": true,
+            "score": 100.0,
+            "detail": "All 0 video citation(s) strictly within [00:00 -> 10:00]."
+          },
+          {
+            "gate_id": 2,
+            "name": "Zero Spoiler Leakage",
+            "passed": true,
+            "score": 100.0,
+            "detail": "0.0% future spoiler leakage across 1 locked future segment(s)."
+          },
+          {
+            "gate_id": 3,
+            "name": "Multimodal Citation Integrity",
+            "passed": true,
+            "score": 100.0,
+            "detail": "1/1 multimodal source citation(s) verified with valid bounds/anchors."
+          },
+          {
+            "gate_id": 4,
+            "name": "Evidence Faithfulness",
+            "passed": true,
+            "score": 82.0,
+            "detail": "Answer claims grounded in 1 permitted evidence chunk(s) (82.0% faithfulness)."
+          },
+          {
+            "gate_id": 5,
+            "name": "Refusal Calibration",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Evidence present and synthesized into grounded explanation."
+          }
+        ]
+      }
     },
     {
       "test_id": 5,
+      "category": "Hallucination Guard",
       "name": "Controlled Refusal for Out-of-Scope Query",
       "passed": true,
-      "latency_ms": 21.27,
-      "detail": "Gracefully stated evidence was not found in permitted material without hallucinating."
+      "latency_ms": 10.45,
+      "timestamp_tested": 600.0,
+      "question": "What is the capital of Australia and who founded Canberra?",
+      "answer_preview": "I cannot find evidence for 'What is the capital of Australia and who founded Canberra?' in the lecture content watched so far (up to 10:00). Please continue watching the lecture or check if this topic is introduced later...",
+      "detail": "Gracefully abstained from answering out-of-domain query with 0% hallucination.",
+      "verdict": {
+        "verdict": "REFUSAL_VERIFIED",
+        "overall_score": 100.0,
+        "temporal_leakage_rate": 0.0,
+        "groundedness_score": 100.0,
+        "citation_precision": 100.0,
+        "permitted_chunks_count": 1,
+        "blocked_future_chunks_count": 1,
+        "gates": [
+          {
+            "gate_id": 1,
+            "name": "Temporal Horizon Guard",
+            "passed": true,
+            "score": 100.0,
+            "detail": "All 0 video citation(s) strictly within [00:00 -> 10:00]."
+          },
+          {
+            "gate_id": 2,
+            "name": "Zero Spoiler Leakage",
+            "passed": true,
+            "score": 100.0,
+            "detail": "0.0% future spoiler leakage across 1 locked future segment(s)."
+          },
+          {
+            "gate_id": 3,
+            "name": "Multimodal Citation Integrity",
+            "passed": true,
+            "score": 100.0,
+            "detail": "No citations emitted (controlled refusal state)."
+          },
+          {
+            "gate_id": 4,
+            "name": "Evidence Faithfulness",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Response abstained from ungrounded claims when permitted evidence was absent."
+          },
+          {
+            "gate_id": 5,
+            "name": "Refusal Calibration",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Calibrated refusal verified: zero evidence triggered explicit non-hallucination guard."
+          }
+        ]
+      }
     },
     {
       "test_id": 6,
-      "name": "Follow-Up Context Retention",
+      "category": "Conversational Memory",
+      "name": "Multi-Turn Context Retention under Horizon",
       "passed": true,
-      "latency_ms": 48.71,
-      "detail": "Maintained session conversation history across consecutive turns."
+      "latency_ms": 9.59,
+      "timestamp_tested": 600.0,
+      "question": "Can you summarize the attention dot-product calculation in simpler terms?",
+      "answer_preview": "Based on the material covered up to 10:00 (Video (02:00 - 04:00)):\n\nThe attention mechanism calculates dot-product affinities between query tokens and key vectors.\n\n(This explanation is strictly bounded to concepts intro...",
+      "detail": "Preserved multi-turn context while maintaining strict [00:00 -> 10:00] boundary.",
+      "verdict": {
+        "verdict": "VERIFIED",
+        "overall_score": 96.4,
+        "temporal_leakage_rate": 0.0,
+        "groundedness_score": 82.0,
+        "citation_precision": 100.0,
+        "permitted_chunks_count": 1,
+        "blocked_future_chunks_count": 1,
+        "gates": [
+          {
+            "gate_id": 1,
+            "name": "Temporal Horizon Guard",
+            "passed": true,
+            "score": 100.0,
+            "detail": "All 1 video citation(s) strictly within [00:00 -> 10:00]."
+          },
+          {
+            "gate_id": 2,
+            "name": "Zero Spoiler Leakage",
+            "passed": true,
+            "score": 100.0,
+            "detail": "0.0% future spoiler leakage across 1 locked future segment(s)."
+          },
+          {
+            "gate_id": 3,
+            "name": "Multimodal Citation Integrity",
+            "passed": true,
+            "score": 100.0,
+            "detail": "1/1 multimodal source citation(s) verified with valid bounds/anchors."
+          },
+          {
+            "gate_id": 4,
+            "name": "Evidence Faithfulness",
+            "passed": true,
+            "score": 82.0,
+            "detail": "Answer claims grounded in 1 permitted evidence chunk(s) (82.0% faithfulness)."
+          },
+          {
+            "gate_id": 5,
+            "name": "Refusal Calibration",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Evidence present and synthesized into grounded explanation."
+          }
+        ]
+      }
     },
     {
       "test_id": 7,
-      "name": "Source Citation Temporal Validity",
+      "category": "Mathematical Bounds",
+      "name": "Source Citation Temporal Validity Invariant",
       "passed": true,
-      "latency_ms": 21.12,
-      "detail": "Confirmed citation bounds are mathematically valid and within permitted range."
+      "latency_ms": 9.14,
+      "timestamp_tested": 600.0,
+      "question": "What affinities does the attention mechanism calculate?",
+      "answer_preview": "Based on the material covered up to 10:00 (Video (02:00 - 04:00)):\n\nThe attention mechanism calculates dot-product affinities between query tokens and key vectors.\n\n(This explanation is strictly bounded to concepts intro...",
+      "detail": "Verified 0 <= start_time < end_time <= playhead_timestamp across all video citations.",
+      "verdict": {
+        "verdict": "VERIFIED",
+        "overall_score": 96.4,
+        "temporal_leakage_rate": 0.0,
+        "groundedness_score": 82.0,
+        "citation_precision": 100.0,
+        "permitted_chunks_count": 1,
+        "blocked_future_chunks_count": 1,
+        "gates": [
+          {
+            "gate_id": 1,
+            "name": "Temporal Horizon Guard",
+            "passed": true,
+            "score": 100.0,
+            "detail": "All 1 video citation(s) strictly within [00:00 -> 10:00]."
+          },
+          {
+            "gate_id": 2,
+            "name": "Zero Spoiler Leakage",
+            "passed": true,
+            "score": 100.0,
+            "detail": "0.0% future spoiler leakage across 1 locked future segment(s)."
+          },
+          {
+            "gate_id": 3,
+            "name": "Multimodal Citation Integrity",
+            "passed": true,
+            "score": 100.0,
+            "detail": "1/1 multimodal source citation(s) verified with valid bounds/anchors."
+          },
+          {
+            "gate_id": 4,
+            "name": "Evidence Faithfulness",
+            "passed": true,
+            "score": 82.0,
+            "detail": "Answer claims grounded in 1 permitted evidence chunk(s) (82.0% faithfulness)."
+          },
+          {
+            "gate_id": 5,
+            "name": "Refusal Calibration",
+            "passed": true,
+            "score": 100.0,
+            "detail": "Evidence present and synthesized into grounded explanation."
+          }
+        ]
+      }
     }
   ]
 }
