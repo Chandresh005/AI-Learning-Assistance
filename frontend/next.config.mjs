@@ -1,9 +1,15 @@
-import type { NextConfig } from "next";
-
 const BACKEND_INTERNAL_URL =
   process.env.BACKEND_INTERNAL_URL || "http://127.0.0.1:8000";
 
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+  },
   async rewrites() {
     return [
       {

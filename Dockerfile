@@ -1,15 +1,20 @@
 # ============================================================================
 # Unified Full-Stack Dockerfile for Render (Frontend + FastAPI Backend + DB)
-# Resolves Render root deployment: "open Dockerfile: no such file or directory"
 # ============================================================================
 
-# Stage 1: Build Next.js Frontend
+# Stage 1: Build Next.js Frontend on Debian glibc
 FROM node:20-bookworm-slim AS frontend-builder
 WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci
+
+# Install dependencies cleanly for Linux x64-gnu (including Tailwind/PostCSS & TypeScript)
+COPY frontend/package.json ./
+RUN npm install --include=dev --no-audit --no-fund
+
 COPY frontend/ ./
+RUN rm -f package-lock.json
+
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
 ENV BACKEND_INTERNAL_URL="http://127.0.0.1:8000"
 RUN npm run build
 
@@ -29,7 +34,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install lightweight production Python dependencies for FastAPI Backend
-COPY backend/requirements.txt /app/backend/requirements.txt
 RUN pip install --no-cache-dir \
     fastapi>=0.111.0 \
     "uvicorn[standard]>=0.30.0" \
@@ -56,7 +60,7 @@ COPY --from=frontend-builder /app/frontend/package.json /app/frontend/package.js
 COPY --from=frontend-builder /app/frontend/node_modules /app/frontend/node_modules
 COPY --from=frontend-builder /app/frontend/.next /app/frontend/.next
 COPY --from=frontend-builder /app/frontend/public /app/frontend/public
-COPY --from=frontend-builder /app/frontend/next.config.ts /app/frontend/next.config.ts
+COPY --from=frontend-builder /app/frontend/next.config.mjs /app/frontend/next.config.mjs
 
 # Create startup script that launches FastAPI on 127.0.0.1:8000 and Next.js on Render's $PORT
 RUN printf '#!/bin/sh\nset -e\n\necho "Starting FastAPI backend on 127.0.0.1:8000..."\ncd /app/backend\npython -m app.db.seed_youtube_course || true\nuvicorn app.main:app --host 127.0.0.1 --port 8000 &\n\necho "Starting Next.js frontend on 0.0.0.0:${PORT:-3000}..."\ncd /app/frontend\nexec npx next start -H 0.0.0.0 -p ${PORT:-3000}\n' > /app/start.sh \
